@@ -1,0 +1,13 @@
+__pycache__/
+.venv/
+venv/
+.git/
+.gitignore
+.env
+.streamlit/secrets.toml
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.ipynb_checkpoints
