@@ -107,6 +107,8 @@ The app will use these values by default and will not show the key in the interf
 - `requirements.txt` includes every runtime dependency.
 - `Dockerfile` builds the app into a Streamlit container.
 - The app falls back to local deterministic analysis if no API key is set.
+- The app prepends `src/` to `sys.path`, so Streamlit Cloud can import the helper modules reliably.
+- Streamlit width warnings are removed by using the newer `width="stretch"` parameter.
 
 ## Environment variables
 

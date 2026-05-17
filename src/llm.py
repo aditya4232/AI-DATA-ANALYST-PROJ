@@ -12,8 +12,8 @@ except ImportError:  # pragma: no cover - supports older OpenAI SDKs
 
 import openai as legacy_openai
 
-from .config import AppConfig
-from .prompts import build_system_prompt
+from config import AppConfig
+from prompts import build_system_prompt
 
 
 @dataclass(frozen=True)

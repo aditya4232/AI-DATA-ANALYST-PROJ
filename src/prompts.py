@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from textwrap import dedent
 
-from .profiling import DatasetProfile, dataframe_preview_text, profile_to_text
+from profiling import DatasetProfile, dataframe_preview_text, profile_to_text
 
 
 def build_analysis_prompt(question: str, profile: DatasetProfile, df_preview: str) -> str:

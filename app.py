@@ -2,18 +2,24 @@ from __future__ import annotations
 
 import io
 import os
+import sys
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from src.charts import format_figure_title, render_result
-from src.config import AppConfig
-from src.execution import AnalysisCodeError, execute_analysis_code
-from src.fallback import FallbackPlan, build_fallback_plan
-from src.llm import LLMError, generate_analysis_plan
-from src.profiling import build_profile, dataframe_preview_text, profile_to_text
-from src.prompts import build_analysis_prompt
+APP_DIR = Path(__file__).resolve().parent
+SRC_DIR = APP_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from charts import format_figure_title, render_result
+from config import AppConfig
+from execution import AnalysisCodeError, execute_analysis_code
+from fallback import FallbackPlan, build_fallback_plan
+from llm import LLMError, generate_analysis_plan
+from profiling import build_profile, dataframe_preview_text, profile_to_text
+from prompts import build_analysis_prompt
 
 
 st.set_page_config(page_title="AI Data Analyst Pro", page_icon="📊", layout="wide")
@@ -250,7 +256,7 @@ def main() -> None:
         st.divider()
         st.subheader("Example questions")
         for question in SAMPLE_QUESTIONS:
-            if st.button(question, use_container_width=True, key=f"sample_{question}"):
+            if st.button(question, width="stretch", key=f"sample_{question}"):
                 set_example_question(question)
                 rerun_app()
         st.divider()
@@ -293,7 +299,7 @@ def main() -> None:
     overview_col, profile_col = st.columns([1.15, 1])
     with overview_col:
         st.subheader("Data preview")
-        st.dataframe(df.head(20), use_container_width=True)
+        st.dataframe(df.head(20), width="stretch")
     with profile_col:
         st.subheader("Dataset profile")
         st.code(profile_text, language="text")
@@ -369,7 +375,7 @@ def main() -> None:
 
                         tables, scalar_text = render_result(outcome.result)
                         for table in tables:
-                            st.dataframe(table, use_container_width=True)
+                            st.dataframe(table, width="stretch")
                         if not tables and scalar_text:
                             st.write(scalar_text)
 
@@ -378,7 +384,7 @@ def main() -> None:
                             for index, fig in enumerate(outcome.figures, start=1):
                                 title = format_figure_title(fig, fallback=f"Chart {index}")
                                 st.caption(title)
-                                st.pyplot(fig, clear_figure=False, use_container_width=True)
+                                st.pyplot(fig, clear_figure=False, width="stretch")
                     else:
                         st.session_state["last_result"] = None
                         st.session_state["last_error"] = None
