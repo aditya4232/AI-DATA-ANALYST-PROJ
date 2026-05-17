@@ -19,11 +19,17 @@ from .prompts import build_system_prompt
 @dataclass(frozen=True)
 class AnalysisPlan:
     answer_kind: str
-    answer: str
+    summary: str
     code: str
     chart_title: str = ""
-    notes: list[str] | None = None
+    key_insights: list[str] | None = None
+    caveats: list[str] | None = None
+    next_step: str = ""
     raw_text: str = ""
+
+    @property
+    def answer(self) -> str:
+        return self.summary
 
 
 class LLMError(RuntimeError):
@@ -75,26 +81,24 @@ def parse_analysis_plan(raw_text: str) -> AnalysisPlan:
         raise LLMError(f"The model did not return valid JSON: {exc}") from exc
 
     answer_kind = str(payload.get("answer_kind", "text")).strip().lower()
-    answer = str(payload.get("answer", "")).strip()
+    summary = str(payload.get("summary", payload.get("answer", ""))).strip()
     code = str(payload.get("code", "")).strip()
     chart_title = str(payload.get("chart_title", "")).strip()
-    notes = payload.get("notes")
-    if isinstance(notes, list):
-        notes_list = [str(item).strip() for item in notes if str(item).strip()]
-    elif notes:
-        notes_list = [str(notes).strip()]
-    else:
-        notes_list = []
+    key_insights = _coerce_text_list(payload.get("key_insights") or payload.get("insights"))
+    caveats = _coerce_text_list(payload.get("caveats") or payload.get("notes"))
+    next_step = str(payload.get("next_step", "")).strip()
 
-    if answer_kind not in {"table", "chart", "text"}:
+    if answer_kind not in {"table", "chart", "text", "clarification"}:
         answer_kind = "text"
 
     return AnalysisPlan(
         answer_kind=answer_kind,
-        answer=answer,
+        summary=summary,
         code=code,
         chart_title=chart_title,
-        notes=notes_list,
+        key_insights=key_insights,
+        caveats=caveats,
+        next_step=next_step,
         raw_text=raw_text,
     )
 
@@ -114,3 +118,12 @@ def _extract_json_object(text: str) -> str:
     if match:
         return match.group(0)
     return text
+
+
+def _coerce_text_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if value:
+        item = str(value).strip()
+        return [item] if item else []
+    return []

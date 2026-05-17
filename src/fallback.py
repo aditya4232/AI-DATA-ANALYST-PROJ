@@ -10,31 +10,50 @@ import pandas as pd
 @dataclass(frozen=True)
 class FallbackPlan:
     answer_kind: str
-    answer: str
+    summary: str
     code: str
     chart_title: str = ""
-    notes: list[str] | None = None
+    key_insights: list[str] | None = None
+    caveats: list[str] | None = None
+    next_step: str = ""
+
+    @property
+    def answer(self) -> str:
+        return self.summary
 
 
 def build_fallback_plan(question: str, df: pd.DataFrame) -> FallbackPlan:
     normalized = question.strip().lower()
     numeric_columns = df.select_dtypes(include="number").columns.tolist()
     text_columns = [column for column in df.columns if column not in numeric_columns]
+    column_names = [column.lower() for column in df.columns]
+
+    if _contains(normalized, ["confidence"]) and not any("confidence" in column for column in column_names):
+        return FallbackPlan(
+            answer_kind="clarification",
+            summary="I can’t find a confidence column in this dataset.",
+            code="result = 'I can\'t find a confidence column in this dataset. Please choose a column name from the dataset.'",
+            key_insights=["Available columns are shown in the dataset profile and raw schema tabs."],
+            caveats=["The request may refer to a column that does not exist in this CSV."],
+            next_step="Ask again using an existing column name, for example `cgpa`, `python_skill`, `aptitude_score`, or `salary_lpa`.",
+        )
 
     if not normalized:
         return FallbackPlan(
             answer_kind="text",
-            answer="Ask a question about the uploaded dataset.",
+            summary="Ask a question about the uploaded dataset.",
             code="result = 'Ask a question about the uploaded dataset.'",
+            next_step="Try a question like: Which branch has the highest average salary_lpa?",
         )
 
     if _contains(normalized, ["missing", "null", "na", "nan"]):
         code = "result = df.isna().sum().sort_values(ascending=False).to_frame(name='missing_cells')"
         return FallbackPlan(
             answer_kind="table",
-            answer="Here is the missing-value summary for each column.",
+            summary="Here is the missing-value summary for each column.",
             code=code,
-            notes=["Sorted from highest to lowest missing count."],
+            key_insights=["Columns with the highest missing counts appear first."],
+            caveats=["Rows with missing values may affect downstream aggregations."],
         )
 
     if _contains(normalized, ["highest total sales", "top sales by region", "sales by region"]):
@@ -48,9 +67,10 @@ def build_fallback_plan(question: str, df: pd.DataFrame) -> FallbackPlan:
             )
             return FallbackPlan(
                 answer_kind="chart",
-                answer=f"This shows total {value_column} by {group_column}.",
+                summary=f"This shows total {value_column} by {group_column}.",
                 code=code,
                 chart_title=f"{group_column.title()} by Total {value_column.title()}",
+                key_insights=[f"Groups are ordered from highest to lowest total {value_column}."],
             )
 
     if _contains(normalized, ["top 2 products", "top products", "highest products"]):
@@ -63,8 +83,9 @@ def build_fallback_plan(question: str, df: pd.DataFrame) -> FallbackPlan:
             )
             return FallbackPlan(
                 answer_kind="table",
-                answer=f"Here are the top 2 {category_column} values by total {value_column}.",
+                summary=f"Here are the top 2 {category_column} values by total {value_column}.",
                 code=code,
+                key_insights=[f"The list is sorted by total {value_column} in descending order."],
             )
 
     if _contains(normalized, ["average salary", "mean salary", "salary by"]):
@@ -74,8 +95,9 @@ def build_fallback_plan(question: str, df: pd.DataFrame) -> FallbackPlan:
             code = f"result = df.groupby('{group_column}')['{value_column}'].mean().sort_values(ascending=False)"
             return FallbackPlan(
                 answer_kind="table",
-                answer=f"This shows the average {value_column} by {group_column}.",
+                summary=f"This shows the average {value_column} by {group_column}.",
                 code=code,
+                key_insights=[f"Higher rows indicate a larger mean {value_column}."],
             )
 
     if _contains(normalized, ["placement rate", "placed status", "placement status"]):
@@ -86,8 +108,9 @@ def build_fallback_plan(question: str, df: pd.DataFrame) -> FallbackPlan:
             )
             return FallbackPlan(
                 answer_kind="table",
-                answer=f"This shows the student count by {group_column}.",
+                summary=f"This shows the student count by {group_column}.",
                 code=code,
+                key_insights=[f"Counts are grouped by {group_column}."],
             )
 
     if _contains(normalized, ["plot", "chart", "bar", "visualize"]):
@@ -103,9 +126,10 @@ def build_fallback_plan(question: str, df: pd.DataFrame) -> FallbackPlan:
             )
             return FallbackPlan(
                 answer_kind="chart",
-                answer=f"This chart compares total {value_column} across {group_column}.",
+                summary=f"This chart compares total {value_column} across {group_column}.",
                 code=code,
                 chart_title=f"{group_column.title()} by Total {value_column.title()}",
+                key_insights=[f"The tallest bar represents the highest total {value_column}."],
             )
 
     if numeric_columns:
@@ -113,16 +137,18 @@ def build_fallback_plan(question: str, df: pd.DataFrame) -> FallbackPlan:
         code = f"result = df['{primary_column}'].describe().to_frame(name='{primary_column}')"
         return FallbackPlan(
             answer_kind="table",
-            answer=f"Here is a summary for {primary_column}.",
+            summary=f"Here is a summary for {primary_column}.",
             code=code,
+            key_insights=["This is a quick numeric summary when no stronger intent match is found."],
         )
 
     fallback_column = str(df.columns[0]) if len(df.columns) else "value"
     code = f"result = df['{fallback_column}'].value_counts().head(10)"
     return FallbackPlan(
         answer_kind="table",
-        answer=f"Here are the most frequent values in {fallback_column}.",
+        summary=f"Here are the most frequent values in {fallback_column}.",
         code=code,
+        key_insights=[f"This helps identify the most common category in {fallback_column}."],
     )
 
 

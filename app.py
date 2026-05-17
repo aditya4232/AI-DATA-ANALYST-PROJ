@@ -174,6 +174,33 @@ def rerun_app() -> None:
         experimental_rerun()
 
 
+def render_response_sections(plan: object) -> None:
+    summary = getattr(plan, "summary", getattr(plan, "answer", ""))
+    key_insights = list(getattr(plan, "key_insights", None) or [])
+    caveats = list(getattr(plan, "caveats", None) or [])
+    next_step = str(getattr(plan, "next_step", "") or "").strip()
+    answer_kind = str(getattr(plan, "answer_kind", "text") or "text").lower()
+
+    st.markdown("### Structured answer")
+    if summary:
+        st.write(summary)
+
+    if key_insights:
+        st.markdown("**Key insights**")
+        for insight in key_insights:
+            st.markdown(f"- {insight}")
+
+    if caveats:
+        st.markdown("**Caveats**")
+        for caveat in caveats:
+            st.markdown(f"- {caveat}")
+
+    if next_step:
+        st.info(next_step)
+
+    st.caption(f"Response type: {answer_kind}")
+
+
 def main() -> None:
     init_state()
     load_css()
@@ -324,39 +351,44 @@ def main() -> None:
                     with st.expander("Generated plan", expanded=False):
                         st.write({
                             "answer_kind": plan.answer_kind,
-                            "answer": plan.answer,
+                            "summary": getattr(plan, "summary", getattr(plan, "answer", "")),
+                            "key_insights": getattr(plan, "key_insights", None),
                             "chart_title": plan.chart_title,
-                            "notes": plan.notes,
+                            "caveats": getattr(plan, "caveats", None),
+                            "next_step": getattr(plan, "next_step", ""),
                         })
                         st.code(plan.code, language="python")
-                    with st.spinner("Executing analysis..."):
-                        outcome = execute_analysis_code(plan.code, df.copy())
-                    st.session_state["last_result"] = outcome
-                    st.session_state["last_error"] = None
+                    render_response_sections(plan)
 
-                    st.markdown("### Answer")
-                    if plan.answer:
-                        st.write(plan.answer)
+                    should_execute = bool(plan.code.strip()) and plan.answer_kind != "clarification"
+                    if should_execute:
+                        with st.spinner("Executing analysis..."):
+                            outcome = execute_analysis_code(plan.code, df.copy())
+                        st.session_state["last_result"] = outcome
+                        st.session_state["last_error"] = None
 
-                    tables, scalar_text = render_result(outcome.result)
-                    for table in tables:
-                        st.dataframe(table, use_container_width=True)
-                    if not tables and scalar_text:
-                        st.write(scalar_text)
+                        tables, scalar_text = render_result(outcome.result)
+                        for table in tables:
+                            st.dataframe(table, use_container_width=True)
+                        if not tables and scalar_text:
+                            st.write(scalar_text)
 
-                    if outcome.figures:
-                        st.markdown("### Chart")
-                        for index, fig in enumerate(outcome.figures, start=1):
-                            title = format_figure_title(fig, fallback=f"Chart {index}")
-                            st.caption(title)
-                            st.pyplot(fig, clear_figure=False, use_container_width=True)
+                        if outcome.figures:
+                            st.markdown("### Chart")
+                            for index, fig in enumerate(outcome.figures, start=1):
+                                title = format_figure_title(fig, fallback=f"Chart {index}")
+                                st.caption(title)
+                                st.pyplot(fig, clear_figure=False, use_container_width=True)
+                    else:
+                        st.session_state["last_result"] = None
+                        st.session_state["last_error"] = None
 
                     st.session_state["history"].append(
                         {
                             "question": question,
-                            "answer": plan.answer,
+                            "answer": getattr(plan, "summary", getattr(plan, "answer", "")),
                             "code": plan.code,
-                            "result_type": outcome.result_type,
+                            "result_type": "clarification" if plan.answer_kind == "clarification" else (outcome.result_type if should_execute else "None"),
                             "mode": "fallback" if st.session_state.get("fallback_mode") else "llm",
                         }
                     )
