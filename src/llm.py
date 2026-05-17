@@ -5,7 +5,12 @@ import json
 import re
 from typing import Any
 
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except ImportError:  # pragma: no cover - supports older OpenAI SDKs
+    OpenAI = None
+
+import openai as legacy_openai
 
 from .config import AppConfig
 from .prompts import build_system_prompt
@@ -31,17 +36,34 @@ def generate_analysis_plan(prompt: str, config: AppConfig) -> AnalysisPlan:
             f"Missing API key for {config.provider_label}. Set NVIDIA_API_KEY, OPENAI_API_KEY, or LLM_API_KEY."
         )
 
-    client = OpenAI(api_key=config.api_key, base_url=config.base_url)
-    response = client.chat.completions.create(
+    content = _create_chat_completion(prompt, config)
+    return parse_analysis_plan(content)
+
+
+def _create_chat_completion(prompt: str, config: AppConfig) -> str:
+    messages = [
+        {"role": "system", "content": build_system_prompt()},
+        {"role": "user", "content": prompt},
+    ]
+
+    if OpenAI is not None:
+        client = OpenAI(api_key=config.api_key, base_url=config.base_url)
+        response = client.chat.completions.create(
+            model=config.model,
+            temperature=config.temperature,
+            messages=messages,
+        )
+        return response.choices[0].message.content or ""
+
+    legacy_openai.api_key = config.api_key
+    if config.base_url:
+        legacy_openai.api_base = config.base_url
+    response = legacy_openai.ChatCompletion.create(
         model=config.model,
         temperature=config.temperature,
-        messages=[
-            {"role": "system", "content": build_system_prompt()},
-            {"role": "user", "content": prompt},
-        ],
+        messages=messages,
     )
-    content = response.choices[0].message.content or ""
-    return parse_analysis_plan(content)
+    return response["choices"][0]["message"]["content"] or ""
 
 
 def parse_analysis_plan(raw_text: str) -> AnalysisPlan:

@@ -98,6 +98,16 @@ def set_example_question(question: str) -> None:
     st.session_state["question_input"] = question
 
 
+def rerun_app() -> None:
+    rerun = getattr(st, "rerun", None)
+    if callable(rerun):
+        rerun()
+        return
+    experimental_rerun = getattr(st, "experimental_rerun", None)
+    if callable(experimental_rerun):
+        experimental_rerun()
+
+
 def main() -> None:
     init_state()
     load_css()
@@ -143,7 +153,7 @@ def main() -> None:
         for question in SAMPLE_QUESTIONS:
             if st.button(question, use_container_width=True, key=f"sample_{question}"):
                 set_example_question(question)
-                st.rerun()
+                rerun_app()
         st.divider()
         st.caption("Tip: for NVIDIA free/hosted access, set NVIDIA_API_KEY in your environment.")
 
