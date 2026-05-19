@@ -27,7 +27,11 @@ The script uses the KaggleHub call you provided and prints the local path to the
 - Natural-language questions over any tabular dataset
 - Constrained LLM prompts that produce JSON analysis plans
 - Guarded local execution of generated pandas code
-- Matplotlib chart rendering
+- Matplotlib chart rendering from LLM-generated code
+- **Auto-generated interactive EDA dashboard** using Plotly — histograms, box plots, correlation heatmaps, grouped bar charts, pie charts, scatter plots, and skills analysis — all created automatically when a dataset loads
+- **Visual Explorer tab** with filtering, full-screen charts, and HTML export/download
+- **Quick overview charts** (collapsed by default) for immediate visual insight
+- Fallback mode with rich chart generation when no API key is configured
 - Chat-style history for prior questions
 - NVIDIA API / OpenAI-compatible provider support
 
@@ -124,11 +128,14 @@ The app will use these values by default and will not show the key in the interf
 
 ## Suggested questions for the placement dataset
 
-- Which stream has the highest placement rate?
-- What is the average salary_lpa by placed status?
+- What is the placement rate by branch?
+- Average salary_lpa by branch (chart)
+- Show the salary distribution with a histogram
+- Which skills are most common by branch?
+- Show me a correlation heatmap of numeric features
+- Top 5 branches by average salary_lpa
+- CGPA distribution by placed status
 - Which features are most associated with placement?
-- Plot CGPA distribution by placed status.
-- Show the top 5 streams by average salary_lpa.
 
 ## Notes
 

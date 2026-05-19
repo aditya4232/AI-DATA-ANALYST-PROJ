@@ -13,7 +13,16 @@ SRC_DIR = APP_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from charts import format_figure_title, render_result
+from charts import (
+    EDADashboard,
+    build_eda_dashboard,
+    format_figure_title,
+    plot_categorical_counts,
+    plot_correlation_heatmap,
+    plot_distribution,
+    plot_salary_analysis,
+    render_result,
+)
 from config import AppConfig
 from execution import AnalysisCodeError, execute_analysis_code
 from fallback import FallbackPlan, build_fallback_plan
@@ -30,11 +39,12 @@ SAMPLE_DATASET_PATH = APP_DIR / "student_placement_salary_elite_v2.csv"
 
 
 SAMPLE_QUESTIONS = [
-    "Which stream has the highest placement rate?",
-    "What is the average salary_lpa by placed status?",
-    "Plot CGPA distribution by placed status.",
-    "Which features are most associated with placement?",
-    "Show the top 5 streams by average salary_lpa.",
+    "What is the placement rate by branch?",
+    "Average salary_lpa by branch (chart)",
+    "Show the salary distribution with a histogram",
+    "Which skills are most common by branch?",
+    "Show me a correlation heatmap of numeric features",
+    "Top 5 branches by average salary_lpa",
 ]
 
 
@@ -138,6 +148,21 @@ def load_css() -> None:
             color: white;
             border: 1px solid rgba(255,255,255,0.25);
         }
+        .chart-container {
+            background: white;
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid rgba(148,163,184,0.15);
+            box-shadow: 0 4px 12px rgba(15,23,42,0.05);
+            margin-bottom: 1rem;
+        }
+        .stPlotlyChart {
+            border-radius: 0.5rem;
+        }
+        div[data-testid="stExpander"] div[data-testid="stExpanderContent"] {
+            background: rgba(255,255,255,0.5);
+            border-radius: 0 0 0.75rem 0.75rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -218,7 +243,7 @@ def main() -> None:
             """
             <div class="hero">
                 <h1>AI Data Analyst Pro</h1>
-                <p>Upload the Kaggle student placement and salary CSV, ask analytical questions in plain English, and get reproducible pandas results with charts.</p>
+                <p>Upload a CSV, ask analytical questions in plain English, and explore auto-generated interactive charts — all powered by pandas and an LLM workflow.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -318,7 +343,17 @@ def main() -> None:
         else:
             st.metric("Non-empty rows", f"{int(df.dropna(how='all').shape[0]):,}")
 
-    tabs = st.tabs(["Ask", "History", "Raw schema"])
+    with st.expander("Quick overview charts", expanded=False):
+        overview_dashboard = build_eda_dashboard(df)
+        overview_charts = overview_dashboard.chart_list
+        # Show first 3 key charts in columns
+        cols = st.columns(3)
+        for idx, (name, fig) in enumerate(overview_charts[:3]):
+            with cols[idx]:
+                st.caption(f"**{name}**")
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    tabs = st.tabs(["Ask", "Visual Explorer", "History", "Raw schema"])
 
     with tabs[0]:
         st.subheader("Chat with your CSV")
@@ -406,6 +441,44 @@ def main() -> None:
             st.error(st.session_state["last_error"])
 
     with tabs[1]:
+        st.subheader("Visual Explorer")
+        st.caption("Auto-generated charts and interactive visualisations from your dataset.")
+        dashboard = build_eda_dashboard(df)
+        chart_items = dashboard.chart_list
+
+        if not chart_items:
+            st.info("No charts could be generated for this dataset.")
+        else:
+            # Category filter
+            all_charts = [name for name, _ in chart_items]
+            selected = st.multiselect(
+                "Filter charts", all_charts, default=all_charts[: min(6, len(all_charts))],
+                key="viz_filter",
+            )
+            display_items = [(n, f) for n, f in chart_items if n in selected]
+
+            if not display_items:
+                st.info("Select at least one chart type above.")
+            else:
+                for name, fig in display_items:
+                    with st.container():
+                        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
+
+                # Download all charts as HTML
+                if len(display_items) > 0:
+                    combined_html = "<html><body>"
+                    for name, fig in display_items:
+                        combined_html += f"<h2>{name}</h2>"
+                        combined_html += fig.to_html(include_plotlyjs="cdn", full_html=False)
+                    combined_html += "</body></html>"
+                    st.download_button(
+                        "Download all charts as HTML",
+                        data=combined_html,
+                        file_name="eda_dashboard.html",
+                        mime="text/html",
+                    )
+
+    with tabs[2]:
         st.subheader("Analysis history")
         if not st.session_state["history"]:
             st.info("No questions answered yet.")
@@ -416,7 +489,7 @@ def main() -> None:
                     st.caption(f"Mode: {item.get('mode', 'llm')} | Result type: {item.get('result_type', 'None')}")
                     st.code(item.get("code", ""), language="python")
 
-    with tabs[2]:
+    with tabs[3]:
         st.subheader("Raw schema")
         st.write(df.dtypes.astype(str).to_frame(name="dtype"))
         st.write("Shape:", df.shape)
